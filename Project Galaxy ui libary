@@ -1,30 +1,29 @@
--- Project Galaxy UI Library v2.0 (Optimized & Bug-Fixed)
--- Enhanced for mobile & desktop | Beautiful Smooth Animations
-
 local ProjectGalaxy = {}
 ProjectGalaxy.__index = ProjectGalaxy
 
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 
--- ===== COLOR PALETTE =====
-local PURPLE = Color3.fromRGB(140, 50, 255)
-local PURPLE_DARK = Color3.fromRGB(90, 30, 180)
-local BG = Color3.fromRGB(18, 18, 28)
-local TEXT = Color3.fromRGB(255, 255, 255)
-local SUBTEXT = Color3.fromRGB(170, 170, 190)
-local OFF = Color3.fromRGB(45, 45, 60)
-local DROPDOWN_BG = Color3.fromRGB(24, 24, 38)
-local TOOLTIP_BG = Color3.fromRGB(30, 30, 45)
+local NEON_PURPLE = Color3.fromRGB(170, 0, 255)
+local DEEP_PURPLE = Color3.fromRGB(50, 0, 100)
+local BG_DARK = Color3.fromRGB(12, 12, 18)
+local BG_LIGHT = Color3.fromRGB(20, 20, 28)
+local TEXT_MAIN = Color3.fromRGB(255, 255, 255)
+local TEXT_SUB = Color3.fromRGB(150, 150, 170)
+local OUTLINE = Color3.fromRGB(70, 30, 120)
+local OFF_STATE = Color3.fromRGB(35, 35, 45)
+local ACCENT_HOVER = Color3.fromRGB(190, 50, 255)
 
--- ===== ADAPTIVE SIZING =====
 local IsTouch = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
-local WINDOW_WIDTH = IsTouch and 360 or 480  -- Made significantly wider
-local WINDOW_HEIGHT = IsTouch and 240 or 300 -- Shorter height to remove the "too tall" look
 
--- ===== HELPER: DRAG FUNCTIONALITY =====
 local function MakeDraggable(dragInst, moveInst)
-	local dragging, dragStart, startPos
+	local dragging = false
+	local dragStart = nil
+	local startPos = nil
+
 	dragInst.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			dragging = true
@@ -33,11 +32,13 @@ local function MakeDraggable(dragInst, moveInst)
 			input:Capture()
 		end
 	end)
+
 	dragInst.InputEnded:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			dragging = false
 		end
 	end)
+
 	UserInputService.InputChanged:Connect(function(input)
 		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
 			local delta = input.Position - dragStart
@@ -49,134 +50,192 @@ local function MakeDraggable(dragInst, moveInst)
 	end)
 end
 
--- ===== HELPER: MINIMIZE BUBBLE =====
-local function CreateBubble(screenGui, windowInstance)
-	-- Changed to TextButton to register clicks properly
-	local bubble = Instance.new("TextButton")
-	bubble.Name = "PGBubble"
-	bubble.Size = UDim2.new(0, 50, 0, 50)
-	bubble.Position = UDim2.new(0.1, 0, 0.5, -25)
-	bubble.BackgroundColor3 = PURPLE
-	bubble.BorderSizePixel = 0
-	bubble.BackgroundTransparency = 0.1
-	bubble.Text = "PG"
-	bubble.TextColor3 = TEXT
-	bubble.Font = Enum.Font.GothamBold
-	bubble.TextSize = 18
-	bubble.ZIndex = 1000
-	bubble.Parent = screenGui
-
-	local corner = Instance.new("UICorner", bubble)
-	corner.CornerRadius = UDim.new(1, 0)
-
-	local stroke = Instance.new("UIStroke", bubble)
-	stroke.Color = PURPLE_DARK
-	stroke.Thickness = 2
-
-	local textStroke = Instance.new("UIStroke", bubble)
-	textStroke.Color = Color3.new(0, 0, 0)
-	textStroke.Thickness = 1.5
-
-	MakeDraggable(bubble, bubble)
-
-	bubble.MouseButton1Click:Connect(function()
-		windowInstance:Restore()
-	end)
-
-	return bubble
+local function CreateTween(instance, properties, duration, style, direction)
+	duration = duration or 0.2
+	style = style or Enum.EasingStyle.Quad
+	direction = direction or Enum.EasingDirection.Out
+	local tween = TweenService:Create(instance, TweenInfo.new(duration, style, direction), properties)
+	tween:Play()
+	return tween
 end
 
--- ===== CREATE WINDOW =====
-function ProjectGalaxy:CreateWindow(title)
-	local Window = setmetatable({}, ProjectGalaxy)
+local NotificationGui = Instance.new("ScreenGui")
+NotificationGui.Name = "PG_Notifications"
+NotificationGui.ResetOnSpawn = false
+NotificationGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+local success = pcall(function() NotificationGui.Parent = CoreGui end)
+if not success then NotificationGui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui") end
 
+local NotifLayoutFrame = Instance.new("Frame")
+NotifLayoutFrame.Size = UDim2.new(0, 300, 1, -40)
+NotifLayoutFrame.Position = UDim2.new(1, -320, 0, 20)
+NotifLayoutFrame.BackgroundTransparency = 1
+NotifLayoutFrame.Parent = NotificationGui
+
+local NotifLayout = Instance.new("UIListLayout")
+NotifLayout.SortOrder = Enum.SortOrder.LayoutOrder
+NotifLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
+NotifLayout.Padding = UDim.new(0, 10)
+NotifLayout.Parent = NotifLayoutFrame
+
+function ProjectGalaxy:Notify(title, text, duration)
+	duration = duration or 3
+
+	local NotifFrame = Instance.new("Frame")
+	NotifFrame.Size = UDim2.new(1, 40, 0, 0)
+	NotifFrame.BackgroundColor3 = BG_DARK
+	NotifFrame.BackgroundTransparency = 0.1
+	NotifFrame.BorderSizePixel = 0
+	NotifFrame.ClipsDescendants = true
+	NotifFrame.Parent = NotifLayoutFrame
+
+	local NotifCorner = Instance.new("UICorner")
+	NotifCorner.CornerRadius = UDim.new(0, 6)
+	NotifCorner.Parent = NotifFrame
+
+	local NotifStroke = Instance.new("UIStroke")
+	NotifStroke.Color = NEON_PURPLE
+	NotifStroke.Thickness = 1.5
+	NotifStroke.Parent = NotifFrame
+
+	local ContentWrapper = Instance.new("Frame")
+	ContentWrapper.Size = UDim2.new(1, 0, 1, 0)
+	ContentWrapper.BackgroundTransparency = 1
+	ContentWrapper.Parent = NotifFrame
+
+	local TitleLabel = Instance.new("TextLabel")
+	TitleLabel.Size = UDim2.new(1, -20, 0, 20)
+	TitleLabel.Position = UDim2.new(0, 10, 0, 10)
+	TitleLabel.BackgroundTransparency = 1
+	TitleLabel.Text = title
+	TitleLabel.TextColor3 = NEON_PURPLE
+	TitleLabel.Font = Enum.Font.GothamBold
+	TitleLabel.TextSize = 14
+	TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+	TitleLabel.Parent = ContentWrapper
+
+	local TextLabel = Instance.new("TextLabel")
+	TextLabel.Size = UDim2.new(1, -20, 0, 40)
+	TextLabel.Position = UDim2.new(0, 10, 0, 30)
+	TextLabel.BackgroundTransparency = 1
+	TextLabel.Text = text
+	TextLabel.TextColor3 = TEXT_SUB
+	TextLabel.Font = Enum.Font.GothamSemibold
+	TextLabel.TextSize = 12
+	TextLabel.TextWrapped = true
+	TextLabel.TextXAlignment = Enum.TextXAlignment.Left
+	TextLabel.TextYAlignment = Enum.TextYAlignment.Top
+	TextLabel.Parent = ContentWrapper
+
+	local Line = Instance.new("Frame")
+	Line.Size = UDim2.new(0, 0, 0, 2)
+	Line.Position = UDim2.new(0, 10, 1, -2)
+	Line.BackgroundColor3 = NEON_PURPLE
+	Line.BorderSizePixel = 0
+	Line.Parent = ContentWrapper
+
+	CreateTween(NotifFrame, {Size = UDim2.new(1, 0, 0, 80)}, 0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+	
+	task.delay(0.4, function()
+		CreateTween(Line, {Size = UDim2.new(1, -20, 0, 2)}, duration, Enum.EasingStyle.Linear)
+	end)
+
+	task.delay(duration + 0.4, function()
+		local outTween = CreateTween(NotifFrame, {Size = UDim2.new(1, 40, 0, 0), BackgroundTransparency = 1}, 0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+		outTween.Completed:Connect(function()
+			NotifFrame:Destroy()
+		end)
+	end)
+end
+
+function ProjectGalaxy:CreateWindow(titleText)
+	local Window = setmetatable({}, ProjectGalaxy)
+	
 	local ScreenGui = Instance.new("ScreenGui")
-	ScreenGui.Name = "ProjectGalaxyLibrary"
+	ScreenGui.Name = "ProjectGalaxyInterface"
 	ScreenGui.ResetOnSpawn = false
 	ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	
-	-- Safe CoreGui parenting check
-	local success, _ = pcall(function() ScreenGui.Parent = game:GetService("CoreGui") end)
-	if not success then ScreenGui.Parent = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui") end
+	local guiSuccess = pcall(function() ScreenGui.Parent = CoreGui end)
+	if not guiSuccess then ScreenGui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui") end
 
-	-- Main frame
 	local Main = Instance.new("Frame")
-	Main.Size = UDim2.new(0, WINDOW_WIDTH, 0, WINDOW_HEIGHT)
-	Main.Position = UDim2.new(0.5, -WINDOW_WIDTH/2, 0.5, -WINDOW_HEIGHT/2)
-	Main.BackgroundColor3 = BG
+	Main.BackgroundColor3 = BG_DARK
 	Main.BackgroundTransparency = 0.05
 	Main.BorderSizePixel = 0
 	Main.ClipsDescendants = true
 	Main.Parent = ScreenGui
 
+	if IsTouch then
+		Main.Size = UDim2.new(0.8, 0, 0.6, 0)
+		Main.Position = UDim2.new(0.1, 0, 0.2, 0)
+	else
+		Main.Size = UDim2.new(0.45, 0, 0.5, 0)
+		Main.Position = UDim2.new(0.275, 0, 0.25, 0)
+	end
+
+	local SizeConstraint = Instance.new("UISizeConstraint", Main)
+	SizeConstraint.MinSize = Vector2.new(450, 300)
+	SizeConstraint.MaxSize = Vector2.new(800, 600)
+
 	local MainCorner = Instance.new("UICorner", Main)
-	MainCorner.CornerRadius = UDim.new(0, 10)
+	MainCorner.CornerRadius = UDim.new(0, 8)
 
 	local MainStroke = Instance.new("UIStroke", Main)
-	MainStroke.Color = PURPLE
+	MainStroke.Color = OUTLINE
 	MainStroke.Thickness = 1.5
 
-	-- Title bar
-	local TitleBar = Instance.new("Frame")
-	TitleBar.Size = UDim2.new(1, 0, 0, 35)
-	TitleBar.BackgroundColor3 = PURPLE_DARK
-	TitleBar.BackgroundTransparency = 0.4
-	TitleBar.BorderSizePixel = 0
-	TitleBar.Parent = Main
+	local TopBar = Instance.new("Frame")
+	TopBar.Size = UDim2.new(1, 0, 0, 40)
+	TopBar.BackgroundColor3 = DEEP_PURPLE
+	TopBar.BackgroundTransparency = 0.3
+	TopBar.BorderSizePixel = 0
+	TopBar.Parent = Main
 
-	local TitleCorner = Instance.new("UICorner", TitleBar)
-	TitleCorner.CornerRadius = UDim.new(0, 10)
+	local TopCorner = Instance.new("UICorner", TopBar)
+	TopCorner.CornerRadius = UDim.new(0, 8)
+	
+	local TopSquarePatch = Instance.new("Frame")
+	TopSquarePatch.Size = UDim2.new(1, 0, 0, 8)
+	TopSquarePatch.Position = UDim2.new(0, 0, 1, -8)
+	TopSquarePatch.BackgroundColor3 = DEEP_PURPLE
+	TopSquarePatch.BackgroundTransparency = 0.3
+	TopSquarePatch.BorderSizePixel = 0
+	TopSquarePatch.Parent = TopBar
 
-	local TitleLabel = Instance.new("TextLabel")
-	TitleLabel.Text = title or "Project Galaxy"
-	TitleLabel.Size = UDim2.new(1, -80, 1, 0)
-	TitleLabel.Position = UDim2.new(0, 12, 0, 0)
-	TitleLabel.BackgroundTransparency = 1
-	TitleLabel.TextColor3 = TEXT
-	TitleLabel.Font = Enum.Font.GothamBold
-	TitleLabel.TextSize = IsTouch and 13 or 15
-	TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
-	TitleLabel.Parent = TitleBar
+	local Title = Instance.new("TextLabel")
+	Title.Text = titleText or "Sci-Fi Interface"
+	Title.Size = UDim2.new(1, -100, 1, 0)
+	Title.Position = UDim2.new(0, 16, 0, 0)
+	Title.BackgroundTransparency = 1
+	Title.TextColor3 = NEON_PURPLE
+	Title.Font = Enum.Font.GothamBold
+	Title.TextSize = 14
+	Title.TextXAlignment = Enum.TextXAlignment.Left
+	Title.Parent = TopBar
 
-	-- Close button
 	local CloseBtn = Instance.new("TextButton")
-	CloseBtn.Text = "×"
-	CloseBtn.Size = UDim2.new(0, 25, 0, 25)
-	CloseBtn.Position = UDim2.new(1, -30, 0.5, -12.5)
+	CloseBtn.Size = UDim2.new(0, 30, 0, 30)
+	CloseBtn.Position = UDim2.new(1, -36, 0.5, -15)
 	CloseBtn.BackgroundTransparency = 1
-	CloseBtn.TextColor3 = TEXT
+	CloseBtn.Text = "X"
+	CloseBtn.TextColor3 = TEXT_MAIN
 	CloseBtn.Font = Enum.Font.GothamBold
-	CloseBtn.TextSize = 20
-	CloseBtn.ZIndex = 10
-	CloseBtn.Parent = TitleBar
+	CloseBtn.TextSize = 14
+	CloseBtn.Parent = TopBar
 
-	CloseBtn.MouseButton1Click:Connect(function()
-		TweenService:Create(Main, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Size = UDim2.new(0, WINDOW_WIDTH, 0, 0), BackgroundTransparency = 1}):Play()
-		task.wait(0.2)
-		if Window._bubble then Window._bubble:Destroy() end
-		ScreenGui:Destroy()
-	end)
-
-	-- Minimize button
 	local MinBtn = Instance.new("TextButton")
-	MinBtn.Text = "—"
-	MinBtn.Size = UDim2.new(0, 25, 0, 25)
-	MinBtn.Position = UDim2.new(1, -55, 0.5, -12.5)
+	MinBtn.Size = UDim2.new(0, 30, 0, 30)
+	MinBtn.Position = UDim2.new(1, -70, 0.5, -15)
 	MinBtn.BackgroundTransparency = 1
-	MinBtn.TextColor3 = TEXT
+	MinBtn.Text = "-"
+	MinBtn.TextColor3 = TEXT_MAIN
 	MinBtn.Font = Enum.Font.GothamBold
-	MinBtn.TextSize = 14
-	MinBtn.ZIndex = 10
-	MinBtn.Parent = TitleBar
+	MinBtn.TextSize = 18
+	MinBtn.Parent = TopBar
 
-	MinBtn.MouseButton1Click:Connect(function()
-		Window:Minimize()
-	end)
-
-	-- Sidebar
 	local Sidebar = Instance.new("Frame")
-	Sidebar.Size = UDim2.new(0, 110, 1, -40)
-	Sidebar.Position = UDim2.new(0, 5, 0, 40)
+	Sidebar.Size = UDim2.new(0.28, 0, 1, -48)
+	Sidebar.Position = UDim2.new(0, 8, 0, 44)
 	Sidebar.BackgroundTransparency = 1
 	Sidebar.Parent = Main
 
@@ -190,204 +249,296 @@ function ProjectGalaxy:CreateWindow(title)
 
 	local TabLayout = Instance.new("UIListLayout")
 	TabLayout.SortOrder = Enum.SortOrder.LayoutOrder
-	TabLayout.Padding = UDim.new(0, 5)
+	TabLayout.Padding = UDim.new(0, 6)
 	TabLayout.Parent = TabScroll
 
-	-- Content area
-	local ContentArea = Instance.new("Frame")
-	ContentArea.Size = UDim2.new(1, -125, 1, -45)
-	ContentArea.Position = UDim2.new(0, 120, 0, 40)
-	ContentArea.BackgroundTransparency = 1
-	ContentArea.ClipsDescendants = true
-	ContentArea.Parent = Main
+	local ContentContainer = Instance.new("Frame")
+	ContentContainer.Size = UDim2.new(0.69, 0, 1, -48)
+	ContentContainer.Position = UDim2.new(0.3, 0, 0, 44)
+	ContentContainer.BackgroundColor3 = BG_LIGHT
+	ContentContainer.BackgroundTransparency = 0.5
+	ContentContainer.BorderSizePixel = 0
+	ContentContainer.ClipsDescendants = true
+	ContentContainer.Parent = Main
 
-	MakeDraggable(TitleBar, Main)
+	local ContentCorner = Instance.new("UICorner", ContentContainer)
+	ContentCorner.CornerRadius = UDim.new(0, 6)
+	local ContentStroke = Instance.new("UIStroke", ContentContainer)
+	ContentStroke.Color = OUTLINE
+	ContentStroke.Thickness = 1
 
-	-- Animations & Window Functions
-	function Window:Minimize()
-		if not Window._bubble then
-			Window._bubble = CreateBubble(ScreenGui, Window)
-		end
-		Window._savedPosition = Main.Position
-		
-		local tween = TweenService:Create(Main, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-			Size = UDim2.new(0, WINDOW_WIDTH, 0, 0),
-			BackgroundTransparency = 1
-		})
-		tween:Play()
-		tween.Completed:Connect(function()
+	MakeDraggable(TopBar, Main)
+
+	local baseSize = Main.Size
+	local isMinimized = false
+
+	local Bubble = Instance.new("TextButton")
+	Bubble.Size = UDim2.new(0, 50, 0, 50)
+	Bubble.Position = UDim2.new(0.05, 0, 0.5, -25)
+	Bubble.BackgroundColor3 = DEEP_PURPLE
+	Bubble.BorderSizePixel = 0
+	Bubble.Text = "P-G"
+	Bubble.TextColor3 = NEON_PURPLE
+	Bubble.Font = Enum.Font.GothamBold
+	Bubble.TextSize = 14
+	Bubble.Visible = false
+	Bubble.Parent = ScreenGui
+
+	Instance.new("UICorner", Bubble).CornerRadius = UDim.new(1, 0)
+	Instance.new("UIStroke", Bubble).Color = NEON_PURPLE
+	Instance.new("UIStroke", Bubble).Thickness = 2
+	MakeDraggable(Bubble, Bubble)
+
+	MinBtn.MouseButton1Click:Connect(function()
+		isMinimized = true
+		baseSize = Main.Size
+		CreateTween(Main, {Size = UDim2.new(baseSize.X.Scale, baseSize.X.Offset, 0, 0), BackgroundTransparency = 1}, 0.3)
+		task.delay(0.3, function()
 			Main.Visible = false
-			Window._bubble.Visible = true
+			Bubble.Visible = true
+			Bubble.Size = UDim2.new(0, 0, 0, 0)
+			CreateTween(Bubble, {Size = UDim2.new(0, 50, 0, 50)}, 0.3, Enum.EasingStyle.Back)
 		end)
-	end
+	end)
 
-	function Window:Restore()
-		Main.Visible = true
-		if Window._savedPosition then
-			Main.Position = Window._savedPosition
-		end
-		if Window._bubble then
-			Window._bubble.Visible = false
-		end
-		TweenService:Create(Main, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-			Size = UDim2.new(0, WINDOW_WIDTH, 0, WINDOW_HEIGHT),
-			BackgroundTransparency = 0.05
-		}):Play()
-	end
+	Bubble.MouseButton1Click:Connect(function()
+		isMinimized = false
+		CreateTween(Bubble, {Size = UDim2.new(0, 0, 0, 0)}, 0.2)
+		task.delay(0.2, function()
+			Bubble.Visible = false
+			Main.Visible = true
+			CreateTween(Main, {Size = baseSize, BackgroundTransparency = 0.05}, 0.3, Enum.EasingStyle.Back)
+		end)
+	end)
 
-	-- Intro Opening Animation
-	Main.Size = UDim2.new(0, WINDOW_WIDTH, 0, 0)
-	TweenService:Create(Main, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = UDim2.new(0, WINDOW_WIDTH, 0, WINDOW_HEIGHT)}):Play()
+	CloseBtn.MouseButton1Click:Connect(function()
+		CreateTween(Main, {Size = UDim2.new(baseSize.X.Scale, baseSize.X.Offset, 0, 0), BackgroundTransparency = 1}, 0.2)
+		task.delay(0.2, function()
+			ScreenGui:Destroy()
+		end)
+	end)
+
+	CloseBtn.MouseEnter:Connect(function() CreateTween(CloseBtn, {TextColor3 = Color3.fromRGB(255, 80, 80)}, 0.15) end)
+	CloseBtn.MouseLeave:Connect(function() CreateTween(CloseBtn, {TextColor3 = TEXT_MAIN}, 0.15) end)
+	MinBtn.MouseEnter:Connect(function() CreateTween(MinBtn, {TextColor3 = NEON_PURPLE}, 0.15) end)
+	MinBtn.MouseLeave:Connect(function() CreateTween(MinBtn, {TextColor3 = TEXT_MAIN}, 0.15) end)
+
+	Main.Size = UDim2.new(baseSize.X.Scale, baseSize.X.Offset, 0, 0)
+	CreateTween(Main, {Size = baseSize}, 0.4, Enum.EasingStyle.Back)
 
 	Window.ScreenGui = ScreenGui
 	Window.TabScroll = TabScroll
-	Window.ContentArea = ContentArea
+	Window.ContentContainer = ContentContainer
 	Window.Tabs = {}
 	Window.CurrentTab = nil
 
 	return Window
 end
 
--- ===== CREATE TAB =====
 function ProjectGalaxy:CreateTab(name)
 	local Tab = {}
-
+	
 	local TabBtn = Instance.new("TextButton")
-	TabBtn.Size = UDim2.new(1, -4, 0, 28)
-	TabBtn.BackgroundColor3 = PURPLE
-	TabBtn.BackgroundTransparency = 0.85
+	TabBtn.Size = UDim2.new(1, -4, 0, 34)
+	TabBtn.BackgroundColor3 = DEEP_PURPLE
+	TabBtn.BackgroundTransparency = 0.8
 	TabBtn.Text = name
-	TabBtn.TextColor3 = SUBTEXT
+	TabBtn.TextColor3 = TEXT_SUB
 	TabBtn.Font = Enum.Font.GothamSemibold
-	TabBtn.TextSize = 12
+	TabBtn.TextSize = 13
 	TabBtn.BorderSizePixel = 0
 	TabBtn.Parent = self.TabScroll
 
-	Instance.new("UICorner", TabBtn).CornerRadius = UDim.new(0, 5)
+	Instance.new("UICorner", TabBtn).CornerRadius = UDim.new(0, 6)
+
+	local TabGroup = Instance.new("CanvasGroup")
+	TabGroup.Size = UDim2.new(1, 0, 1, 0)
+	TabGroup.BackgroundTransparency = 1
+	TabGroup.GroupTransparency = 1
+	TabGroup.Visible = false
+	TabGroup.Parent = self.ContentContainer
 
 	local TabContent = Instance.new("ScrollingFrame")
 	TabContent.Size = UDim2.new(1, 0, 1, 0)
 	TabContent.BackgroundTransparency = 1
 	TabContent.ScrollBarThickness = 2
-	TabContent.ScrollBarImageColor3 = PURPLE
+	TabContent.ScrollBarImageColor3 = NEON_PURPLE
 	TabContent.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	TabContent.CanvasSize = UDim2.new(0, 0, 0, 0)
-	TabContent.Visible = false
-	TabContent.Parent = self.ContentArea
+	TabContent.Parent = TabGroup
 
 	local ContentLayout = Instance.new("UIListLayout")
 	ContentLayout.SortOrder = Enum.SortOrder.LayoutOrder
-	ContentLayout.Padding = UDim.new(0, 6)
+	ContentLayout.Padding = UDim.new(0, 8)
 	ContentLayout.Parent = TabContent
 
 	local ContentPad = Instance.new("UIPadding")
-	ContentPad.PaddingLeft = UDim.new(0, 4)
-	ContentPad.PaddingRight = UDim.new(0, 8)
-	ContentPad.PaddingTop = UDim.new(0, 4)
-	ContentPad.PaddingBottom = UDim.new(0, 4)
+	ContentPad.PaddingLeft = UDim.new(0, 8)
+	ContentPad.PaddingRight = UDim.new(0, 10)
+	ContentPad.PaddingTop = UDim.new(0, 8)
+	ContentPad.PaddingBottom = UDim.new(0, 8)
 	ContentPad.Parent = TabContent
 
 	Tab.Button = TabBtn
+	Tab.Group = TabGroup
 	Tab.Content = TabContent
+
+	TabBtn.MouseEnter:Connect(function()
+		if self.CurrentTab ~= Tab then
+			CreateTween(TabBtn, {BackgroundTransparency = 0.6, TextColor3 = TEXT_MAIN}, 0.15)
+		end
+	end)
+
+	TabBtn.MouseLeave:Connect(function()
+		if self.CurrentTab ~= Tab then
+			CreateTween(TabBtn, {BackgroundTransparency = 0.8, TextColor3 = TEXT_SUB}, 0.15)
+		end
+	end)
 
 	TabBtn.MouseButton1Click:Connect(function()
 		if self.CurrentTab and self.CurrentTab ~= Tab then
-			self.CurrentTab.Content.Visible = false
-			TweenService:Create(self.CurrentTab.Button, TweenInfo.new(0.15), { BackgroundTransparency = 0.85, TextColor3 = SUBTEXT }):Play()
+			local prevTab = self.CurrentTab
+			CreateTween(prevTab.Button, {BackgroundTransparency = 0.8, TextColor3 = TEXT_SUB}, 0.2)
+			CreateTween(prevTab.Group, {GroupTransparency = 1, Position = UDim2.new(0, -30, 0, 0)}, 0.2)
+			task.delay(0.2, function() prevTab.Group.Visible = false end)
 		end
 		if self.CurrentTab ~= Tab then
-			TabContent.Visible = true
-			TabContent.CanvasPosition = Vector2.new(0,0)
-			TweenService:Create(TabBtn, TweenInfo.new(0.15), { BackgroundTransparency = 0.4, TextColor3 = TEXT }):Play()
 			self.CurrentTab = Tab
+			TabGroup.Position = UDim2.new(0, 30, 0, 0)
+			TabGroup.Visible = true
+			CreateTween(TabBtn, {BackgroundTransparency = 0.2, TextColor3 = NEON_PURPLE}, 0.2)
+			CreateTween(TabGroup, {GroupTransparency = 0, Position = UDim2.new(0, 0, 0, 0)}, 0.3)
 		end
 	end)
 
 	if not self.CurrentTab then
-		TabContent.Visible = true
-		TabBtn.BackgroundTransparency = 0.4
-		TabBtn.TextColor3 = TEXT
 		self.CurrentTab = Tab
+		TabBtn.BackgroundTransparency = 0.2
+		TabBtn.TextColor3 = NEON_PURPLE
+		TabGroup.Visible = true
+		TabGroup.GroupTransparency = 0
+		TabGroup.Position = UDim2.new(0, 0, 0, 0)
 	end
 
 	table.insert(self.Tabs, Tab)
 	return Tab
 end
 
--- ===== CREATE SECTION =====
 function ProjectGalaxy:CreateSection(tab, title)
 	local Section = Instance.new("Frame")
-	Section.Size = UDim2.new(1, 0, 0, 22)
+	Section.Size = UDim2.new(1, 0, 0, 26)
 	Section.BackgroundTransparency = 1
+	Section.AutomaticSize = Enum.AutomaticSize.Y
 	Section.Parent = tab.Content
 
 	local Label = Instance.new("TextLabel")
 	Label.Text = title:upper()
-	Label.Size = UDim2.new(1, 0, 1, 0)
+	Label.Size = UDim2.new(1, 0, 0, 26)
 	Label.BackgroundTransparency = 1
-	Label.TextColor3 = PURPLE
+	Label.TextColor3 = NEON_PURPLE
 	Label.Font = Enum.Font.GothamBold
-	Label.TextSize = 10
+	Label.TextSize = 12
 	Label.TextXAlignment = Enum.TextXAlignment.Left
+	Label.TextYAlignment = Enum.TextYAlignment.Center
 	Label.Parent = Section
+
+	local Line = Instance.new("Frame")
+	Line.Size = UDim2.new(1, 0, 0, 1)
+	Line.Position = UDim2.new(0, 0, 1, -2)
+	Line.BackgroundColor3 = OUTLINE
+	Line.BorderSizePixel = 0
+	Line.Parent = Section
 
 	return Section
 end
 
--- ===== CREATE BUTTON =====
-function ProjectGalaxy:CreateButton(tab, text, callback)
-	local Btn = Instance.new("TextButton")
-	Btn.Size = UDim2.new(1, 0, 0, 30)
-	Btn.BackgroundColor3 = PURPLE
-	Btn.BackgroundTransparency = 0.6
-	Btn.Text = text
-	Btn.TextColor3 = TEXT
-	Btn.Font = Enum.Font.GothamSemibold
-	Btn.TextSize = 12
-	Btn.BorderSizePixel = 0
-	Btn.Parent = tab.Content
+function ProjectGalaxy:CreateText(tab, text)
+	local Label = Instance.new("TextLabel")
+	Label.Size = UDim2.new(1, 0, 0, 20)
+	Label.BackgroundTransparency = 1
+	Label.Text = text
+	Label.TextColor3 = TEXT_SUB
+	Label.Font = Enum.Font.GothamSemibold
+	Label.TextSize = 12
+	Label.TextWrapped = true
+	Label.TextXAlignment = Enum.TextXAlignment.Left
+	Label.AutomaticSize = Enum.AutomaticSize.Y
+	Label.Parent = tab.Content
+	return Label
+end
 
-	Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 5)
+function ProjectGalaxy:CreateButton(tab, text, callback)
+	local BtnFrame = Instance.new("Frame")
+	BtnFrame.Size = UDim2.new(1, 0, 0, 36)
+	BtnFrame.BackgroundTransparency = 1
+	BtnFrame.Parent = tab.Content
+
+	local Btn = Instance.new("TextButton")
+	Btn.Size = UDim2.new(1, 0, 1, 0)
+	Btn.BackgroundColor3 = DEEP_PURPLE
+	Btn.BackgroundTransparency = 0.5
+	Btn.Text = text
+	Btn.TextColor3 = TEXT_MAIN
+	Btn.Font = Enum.Font.GothamBold
+	Btn.TextSize = 13
+	Btn.BorderSizePixel = 0
+	Btn.Parent = BtnFrame
+
+	local Corner = Instance.new("UICorner", Btn)
+	Corner.CornerRadius = UDim.new(0, 6)
+
+	local Stroke = Instance.new("UIStroke", Btn)
+	Stroke.Color = OUTLINE
+	Stroke.Thickness = 1
+
+	Btn.MouseEnter:Connect(function()
+		CreateTween(Btn, {BackgroundTransparency = 0.2}, 0.15)
+		CreateTween(Stroke, {Color = NEON_PURPLE}, 0.15)
+	end)
+
+	Btn.MouseLeave:Connect(function()
+		CreateTween(Btn, {BackgroundTransparency = 0.5}, 0.15)
+		CreateTween(Stroke, {Color = OUTLINE}, 0.15)
+	end)
 
 	Btn.MouseButton1Click:Connect(function()
-		TweenService:Create(Btn, TweenInfo.new(0.05), { BackgroundTransparency = 0.2 }):Play()
-		task.delay(0.08, function()
-			TweenService:Create(Btn, TweenInfo.new(0.1), { BackgroundTransparency = 0.6 }):Play()
-		end)
+		CreateTween(Btn, {Size = UDim2.new(0.96, 0, 0.9, 0), Position = UDim2.new(0.02, 0, 0.05, 0)}, 0.1, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+		task.wait(0.1)
+		CreateTween(Btn, {Size = UDim2.new(1, 0, 1, 0), Position = UDim2.new(0, 0, 0, 0)}, 0.1, Enum.EasingStyle.Sine, Enum.EasingDirection.In)
 		if callback then pcall(callback) end
 	end)
 
 	return Btn
 end
 
--- ===== CREATE TOGGLE =====
 function ProjectGalaxy:CreateToggle(tab, text, default, callback)
 	local state = default == true
 
 	local Frame = Instance.new("Frame")
-	Frame.Size = UDim2.new(1, 0, 0, 32)
-	Frame.BackgroundColor3 = Color3.fromRGB(25, 25, 40)
+	Frame.Size = UDim2.new(1, 0, 0, 38)
+	Frame.BackgroundColor3 = BG_DARK
 	Frame.BackgroundTransparency = 0.4
 	Frame.BorderSizePixel = 0
 	Frame.Parent = tab.Content
 
-	Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 5)
+	Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 6)
+	Instance.new("UIStroke", Frame).Color = OUTLINE
 
 	local Label = Instance.new("TextLabel")
 	Label.Text = text
-	Label.Size = UDim2.new(1, -50, 1, 0)
-	Label.Position = UDim2.new(0, 10, 0, 0)
+	Label.Size = UDim2.new(1, -70, 1, 0)
+	Label.Position = UDim2.new(0, 12, 0, 0)
 	Label.BackgroundTransparency = 1
-	Label.TextColor3 = TEXT
+	Label.TextColor3 = TEXT_MAIN
 	Label.Font = Enum.Font.GothamSemibold
-	Label.TextSize = 12
+	Label.TextSize = 13
 	Label.TextXAlignment = Enum.TextXAlignment.Left
 	Label.Parent = Frame
 
 	local Track = Instance.new("TextButton")
-	Track.Size = UDim2.new(0, 36, 0, 18)
-	Track.Position = UDim2.new(1, -44, 0.5, -9)
-	Track.BackgroundColor3 = state and PURPLE or OFF
+	Track.Size = UDim2.new(0, 44, 0, 22)
+	Track.Position = UDim2.new(1, -56, 0.5, -11)
+	Track.BackgroundColor3 = state and NEON_PURPLE or OFF_STATE
 	Track.Text = ""
 	Track.BorderSizePixel = 0
 	Track.Parent = Frame
@@ -395,9 +546,9 @@ function ProjectGalaxy:CreateToggle(tab, text, default, callback)
 	Instance.new("UICorner", Track).CornerRadius = UDim.new(1, 0)
 
 	local Knob = Instance.new("Frame")
-	Knob.Size = Instance.new("UICorner", Knob) and UDim2.new(0, 14, 0, 14)
-	Knob.Position = state and UDim2.new(0, 20, 0.5, -7) or UDim2.new(0, 2, 0.5, -7)
-	Knob.BackgroundColor3 = TEXT
+	Knob.Size = UDim2.new(0, 18, 0, 18)
+	Knob.Position = state and UDim2.new(0, 24, 0.5, -9) or UDim2.new(0, 2, 0.5, -9)
+	Knob.BackgroundColor3 = TEXT_MAIN
 	Knob.BorderSizePixel = 0
 	Knob.Parent = Track
 
@@ -405,182 +556,54 @@ function ProjectGalaxy:CreateToggle(tab, text, default, callback)
 
 	Track.MouseButton1Click:Connect(function()
 		state = not state
-		TweenService:Create(Track, TweenInfo.new(0.15, Enum.EasingStyle.Quad), {BackgroundColor3 = state and PURPLE or OFF}):Play()
-		TweenService:Create(Knob, TweenInfo.new(0.15, Enum.EasingStyle.Quad), {Position = state and UDim2.new(0, 20, 0.5, -7) or UDim2.new(0, 2, 0.5, -7)}):Play()
+		CreateTween(Track, {BackgroundColor3 = state and NEON_PURPLE or OFF_STATE}, 0.2)
+		CreateTween(Knob, {Position = state and UDim2.new(0, 24, 0.5, -9) or UDim2.new(0, 2, 0.5, -9)}, 0.25, Enum.EasingStyle.Back)
 		if callback then pcall(callback, state) end
 	end)
 
 	return Frame
 end
 
--- ===== CREATE DROPDOWN =====
-function ProjectGalaxy:CreateDropdown(tab, text, options, default, callback)
-	local selected = default or (options and options[1]) or "Select..."
-	local isOpen = false
-
-	local Wrapper = Instance.new("Frame")
-	Wrapper.Size = UDim2.new(1, 0, 0, 48)
-	Wrapper.BackgroundTransparency = 1
-	Wrapper.Parent = tab.Content
-
-	local Label = Instance.new("TextLabel")
-	Label.Text = text
-	Label.Size = UDim2.new(1, 0, 0, 16)
-	Label.BackgroundTransparency = 1
-	Label.TextColor3 = SUBTEXT
-	Label.Font = Enum.Font.GothamSemibold
-	Label.TextSize = 11
-	Label.TextXAlignment = Enum.TextXAlignment.Left
-	Label.Parent = Wrapper
-
-	local DropBtn = Instance.new("TextButton")
-	DropBtn.Size = UDim2.new(1, 0, 0, 26)
-	DropBtn.Position = UDim2.new(0, 0, 0, 18)
-	DropBtn.BackgroundColor3 = PURPLE_DARK
-	DropBtn.BackgroundTransparency = 0.4
-	DropBtn.Text = "  " .. selected .. "  ▾"
-	DropBtn.TextColor3 = TEXT
-	DropBtn.Font = Enum.Font.Gotham
-	DropBtn.TextSize = 11
-	DropBtn.TextXAlignment = Enum.TextXAlignment.Left
-	DropBtn.BorderSizePixel = 0
-	DropBtn.Parent = Wrapper
-
-	Instance.new("UICorner", DropBtn).CornerRadius = UDim.new(0, 5)
-
-	local List = Instance.new("ScrollingFrame")
-	List.BackgroundColor3 = DROPDOWN_BG
-	List.BorderSizePixel = 0
-	List.Visible = false
-	List.ZIndex = 100
-	List.ScrollBarThickness = 2
-	List.AutomaticCanvasSize = Enum.AutomaticSize.Y
-	List.CanvasSize = UDim2.new(0,0,0,0)
-	List.Parent = self.ScreenGui
-
-	Instance.new("UICorner", List).CornerRadius = UDim.new(0, 5)
-	Instance.new("UIStroke", List).Color = PURPLE
-
-	local LLayout = Instance.new("UIListLayout")
-	LLayout.SortOrder = Enum.SortOrder.LayoutOrder
-	LLayout.Parent = List
-
-	local ITEM_H = 24
-	for _, opt in ipairs(options or {}) do
-		local OptBtn = Instance.new("TextButton")
-		OptBtn.Size = UDim2.new(1, 0, 0, ITEM_H)
-		OptBtn.BackgroundColor3 = PURPLE
-		OptBtn.BackgroundTransparency = 1
-		OptBtn.Text = "  " .. opt
-		OptBtn.TextColor3 = TEXT
-		OptBtn.Font = Enum.Font.Gotham
-		OptBtn.TextSize = 11
-		OptBtn.TextXAlignment = Enum.TextXAlignment.Left
-		OptBtn.ZIndex = 101
-		OptBtn.BorderSizePixel = 0
-		OptBtn.Parent = List
-
-		OptBtn.MouseButton1Click:Connect(function()
-			selected = opt
-			DropBtn.Text = "  " .. opt .. "  ▾"
-			List.Visible = false
-			isOpen = false
-			if callback then pcall(callback, opt) end
-		end)
-	end
-
-	DropBtn.MouseButton1Click:Connect(function()
-		isOpen = not isOpen
-		if isOpen then
-			local pos = DropBtn.AbsolutePosition
-			local size = DropBtn.AbsoluteSize
-			List.Size = UDim2.new(0, size.X, 0, math.min(#options * ITEM_H, 100))
-			List.Position = UDim2.new(0, pos.X, 0, pos.Y + size.Y + 2)
-		end
-		List.Visible = isOpen
-	end)
-
-	return Wrapper
-end
-
--- ===== CREATE TEXT =====
-function ProjectGalaxy:CreateText(tab, text, isDescription)
-	local Label = Instance.new("TextLabel")
-	Label.Size = UDim2.new(1, 0, 0, isDescription and 28 or 18)
-	Label.BackgroundTransparency = 1
-	Label.Text = text
-	Label.TextColor3 = isDescription and SUBTEXT or TEXT
-	Label.Font = isDescription and Enum.Font.Gotham or Enum.Font.GothamSemibold
-	Label.TextSize = isDescription and 11 or 12
-	Label.TextWrapped = true
-	Label.TextXAlignment = Enum.TextXAlignment.Left
-	Label.Parent = tab.Content
-	return Label
-end
-
--- ===== ADD TOOLTIP =====
-function ProjectGalaxy:AddTooltip(element, tooltipText)
-	local Tip = Instance.new("TextLabel")
-	Tip.Size = UDim2.new(0, 140, 0, 24)
-	Tip.BackgroundColor3 = TOOLTIP_BG
-	Tip.Text = " " .. tooltipText
-	Tip.TextColor3 = TEXT
-	Tip.Font = Enum.Font.Gotham
-	Tip.TextSize = 10
-	Tip.TextXAlignment = Enum.TextXAlignment.Center
-	Tip.Visible = false
-	Tip.ZIndex = 500
-	Tip.Parent = self.ScreenGui
-
-	Instance.new("UICorner", Tip).CornerRadius = UDim.new(0, 4)
-	Instance.new("UIStroke", Tip).Color = PURPLE
-
-	element.MouseEnter:Connect(function()
-		local pos = element.AbsolutePosition
-		local size = element.AbsoluteSize
-		Tip.Position = UDim2.new(0, pos.X + (size.X / 2) - 70, 0, pos.Y - 28)
-		Tip.Visible = true
-	end)
-
-	element.MouseLeave:Connect(function()
-		Tip.Visible = false
-	end)
-end
-
--- ===== CREATE SLIDER =====
 function ProjectGalaxy:CreateSlider(tab, text, min, max, default, callback)
 	local value = default or min
 
 	local Frame = Instance.new("Frame")
-	Frame.Size = UDim2.new(1, 0, 0, 40)
-	Frame.BackgroundTransparency = 1
+	Frame.Size = UDim2.new(1, 0, 0, 50)
+	Frame.BackgroundColor3 = BG_DARK
+	Frame.BackgroundTransparency = 0.4
+	Frame.BorderSizePixel = 0
 	Frame.Parent = tab.Content
+
+	Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 6)
+	Instance.new("UIStroke", Frame).Color = OUTLINE
 
 	local Label = Instance.new("TextLabel")
 	Label.Text = text
-	Label.Size = UDim2.new(1, -50, 0, 16)
+	Label.Size = UDim2.new(1, -60, 0, 20)
+	Label.Position = UDim2.new(0, 12, 0, 4)
 	Label.BackgroundTransparency = 1
-	Label.TextColor3 = TEXT
+	Label.TextColor3 = TEXT_MAIN
 	Label.Font = Enum.Font.GothamSemibold
-	Label.TextSize = 11
+	Label.TextSize = 13
 	Label.TextXAlignment = Enum.TextXAlignment.Left
 	Label.Parent = Frame
 
-	local ValLabel = Instance.new("TextLabel")
-	ValLabel.Text = tostring(value)
-	ValLabel.Size = UDim2.new(0, 45, 0, 16)
-	ValLabel.Position = UDim2.new(1, -45, 0, 0)
-	ValLabel.BackgroundTransparency = 1
-	ValLabel.TextColor3 = PURPLE
-	ValLabel.Font = Enum.Font.GothamBold
-	ValLabel.TextSize = 11
-	ValLabel.TextXAlignment = Enum.TextXAlignment.Right
-	ValLabel.Parent = Frame
+	local ValBox = Instance.new("TextBox")
+	ValBox.Text = tostring(value)
+	ValBox.Size = UDim2.new(0, 50, 0, 20)
+	ValBox.Position = UDim2.new(1, -60, 0, 4)
+	ValBox.BackgroundTransparency = 1
+	ValBox.TextColor3 = NEON_PURPLE
+	ValBox.Font = Enum.Font.GothamBold
+	ValBox.TextSize = 13
+	ValBox.TextXAlignment = Enum.TextXAlignment.Right
+	ValBox.ClearTextOnFocus = false
+	ValBox.Parent = Frame
 
 	local SliderBar = Instance.new("TextButton")
-	SliderBar.Size = UDim2.new(1, -8, 0, 6)
-	SliderBar.Position = UDim2.new(0, 4, 0, 24)
-	SliderBar.BackgroundColor3 = OFF
+	SliderBar.Size = UDim2.new(1, -24, 0, 6)
+	SliderBar.Position = UDim2.new(0, 12, 0, 34)
+	SliderBar.BackgroundColor3 = OFF_STATE
 	SliderBar.Text = ""
 	SliderBar.BorderSizePixel = 0
 	SliderBar.Parent = Frame
@@ -588,39 +611,43 @@ function ProjectGalaxy:CreateSlider(tab, text, min, max, default, callback)
 	Instance.new("UICorner", SliderBar).CornerRadius = UDim.new(1, 0)
 
 	local Fill = Instance.new("Frame")
-	Fill.Size = UDim2.new((value - min) / (max - min), 0, 1, 0)
-	Fill.BackgroundColor3 = PURPLE
+	Fill.Size = UDim2.new(math.clamp((value - min) / (max - min), 0, 1), 0, 1, 0)
+	Fill.BackgroundColor3 = NEON_PURPLE
 	Fill.BorderSizePixel = 0
 	Fill.Parent = SliderBar
 
 	Instance.new("UICorner", Fill).CornerRadius = UDim.new(1, 0)
 
 	local Knob = Instance.new("Frame")
-	Knob.Size = UDim2.new(0, 12, 0, 12)
-	Knob.Position = UDim2.new((value - min) / (max - min), -6, 0.5, -6)
-	Knob.BackgroundColor3 = TEXT
+	Knob.Size = UDim2.new(0, 14, 0, 14)
+	Knob.Position = UDim2.new(math.clamp((value - min) / (max - min), 0, 1), -7, 0.5, -7)
+	Knob.BackgroundColor3 = TEXT_MAIN
 	Knob.BorderSizePixel = 0
 	Knob.Parent = SliderBar
 
 	Instance.new("UICorner", Knob).CornerRadius = UDim.new(1, 0)
 
-	local function updateSlider(input)
+	local function updateValue(newVal)
+		value = math.clamp(newVal, min, max)
+		local relative = (value - min) / (max - min)
+		CreateTween(Fill, {Size = UDim2.new(relative, 0, 1, 0)}, 0.1)
+		CreateTween(Knob, {Position = UDim2.new(relative, -7, 0.5, -7)}, 0.1)
+		ValBox.Text = tostring(value)
+		if callback then pcall(callback, value) end
+	end
+
+	local function updateSliderFromInput(input)
 		local barSize = SliderBar.AbsoluteSize.X
 		local relativePos = math.clamp((input.Position.X - SliderBar.AbsolutePosition.X) / barSize, 0, 1)
-		value = math.floor(min + (max - min) * relativePos + 0.5)
-		
-		TweenService:Create(Fill, TweenInfo.new(0.05), {Size = UDim2.new(relativePos, 0, 1, 0)}):Play()
-		TweenService:Create(Knob, TweenInfo.new(0.05), {Position = UDim2.new(relativePos, -6, 0.5, -6)}):Play()
-		
-		ValLabel.Text = tostring(value)
-		if callback then pcall(callback, value) end
+		local calculatedValue = math.floor(min + (max - min) * relativePos + 0.5)
+		updateValue(calculatedValue)
 	end
 
 	local sliding = false
 	SliderBar.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			sliding = true
-			updateSlider(input)
+			updateSliderFromInput(input)
 			input:Capture()
 		end
 	end)
@@ -633,50 +660,454 @@ function ProjectGalaxy:CreateSlider(tab, text, min, max, default, callback)
 
 	UserInputService.InputChanged:Connect(function(input)
 		if sliding and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-			updateSlider(input)
+			updateSliderFromInput(input)
+		end
+	end)
+
+	ValBox.FocusLost:Connect(function()
+		local num = tonumber(ValBox.Text)
+		if num then
+			updateValue(num)
+		else
+			ValBox.Text = tostring(value)
 		end
 	end)
 
 	return Frame
 end
 
--- ===== CREATE TEXTBOX =====
 function ProjectGalaxy:CreateTextbox(tab, text, placeholder, callback)
-	local Wrapper = Instance.new("Frame")
-	Wrapper.Size = UDim2.new(1, 0, 0, 46)
-	Wrapper.BackgroundTransparency = 1
-	Wrapper.Parent = tab.Content
+	local Frame = Instance.new("Frame")
+	Frame.Size = UDim2.new(1, 0, 0, 60)
+	Frame.BackgroundColor3 = BG_DARK
+	Frame.BackgroundTransparency = 0.4
+	Frame.BorderSizePixel = 0
+	Frame.Parent = tab.Content
+
+	Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 6)
+	Instance.new("UIStroke", Frame).Color = OUTLINE
 
 	local Label = Instance.new("TextLabel")
 	Label.Text = text
-	Label.Size = UDim2.new(1, 0, 0, 16)
+	Label.Size = UDim2.new(1, -24, 0, 20)
+	Label.Position = UDim2.new(0, 12, 0, 6)
 	Label.BackgroundTransparency = 1
-	Label.TextColor3 = SUBTEXT
+	Label.TextColor3 = TEXT_MAIN
 	Label.Font = Enum.Font.GothamSemibold
-	Label.TextSize = 11
+	Label.TextSize = 13
 	Label.TextXAlignment = Enum.TextXAlignment.Left
-	Label.Parent = Wrapper
+	Label.Parent = Frame
+
+	local BoxWrapper = Instance.new("Frame")
+	BoxWrapper.Size = UDim2.new(1, -24, 0, 26)
+	BoxWrapper.Position = UDim2.new(0, 12, 0, 28)
+	BoxWrapper.BackgroundColor3 = BG_LIGHT
+	BoxWrapper.BorderSizePixel = 0
+	BoxWrapper.Parent = Frame
+
+	Instance.new("UICorner", BoxWrapper).CornerRadius = UDim.new(0, 4)
+	local BoxStroke = Instance.new("UIStroke", BoxWrapper)
+	BoxStroke.Color = OUTLINE
 
 	local Textbox = Instance.new("TextBox")
-	Textbox.Size = UDim2.new(1, 0, 0, 24)
-	Textbox.Position = UDim2.new(0, 0, 0, 18)
-	Textbox.BackgroundColor3 = Color3.fromRGB(25, 25, 40)
-	Textbox.BackgroundTransparency = 0.4
-	Textbox.TextColor3 = TEXT
-	Textbox.PlaceholderColor3 = OFF
-	Textbox.PlaceholderText = placeholder or "Enter text..."
+	Textbox.Size = UDim2.new(1, -10, 1, 0)
+	Textbox.Position = UDim2.new(0, 5, 0, 0)
+	Textbox.BackgroundTransparency = 1
+	Textbox.TextColor3 = TEXT_MAIN
+	Textbox.PlaceholderColor3 = TEXT_SUB
+	Textbox.PlaceholderText = placeholder or "Type here..."
 	Textbox.Font = Enum.Font.Gotham
-	Textbox.TextSize = 11
-	Textbox.BorderSizePixel = 0
-	Textbox.Parent = Wrapper
+	Textbox.TextSize = 12
+	Textbox.TextXAlignment = Enum.TextXAlignment.Left
+	Textbox.ClearTextOnFocus = false
+	Textbox.Parent = BoxWrapper
 
-	Instance.new("UICorner", Textbox).CornerRadius = UDim.new(0, 5)
+	Textbox.Focused:Connect(function()
+		CreateTween(BoxStroke, {Color = NEON_PURPLE}, 0.2)
+	end)
 
 	Textbox.FocusLost:Connect(function(enterPressed)
+		CreateTween(BoxStroke, {Color = OUTLINE}, 0.2)
 		if callback then pcall(callback, Textbox.Text, enterPressed) end
 	end)
 
-	return Wrapper
+	return Frame
+end
+
+function ProjectGalaxy:CreateDropdown(tab, text, options, default, callback)
+	local selected = default or (options and options[1]) or "Select..."
+	local isOpen = false
+
+	local Frame = Instance.new("Frame")
+	Frame.Size = UDim2.new(1, 0, 0, 60)
+	Frame.BackgroundColor3 = BG_DARK
+	Frame.BackgroundTransparency = 0.4
+	Frame.BorderSizePixel = 0
+	Frame.Parent = tab.Content
+
+	Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 6)
+	Instance.new("UIStroke", Frame).Color = OUTLINE
+
+	local Label = Instance.new("TextLabel")
+	Label.Text = text
+	Label.Size = UDim2.new(1, -24, 0, 20)
+	Label.Position = UDim2.new(0, 12, 0, 6)
+	Label.BackgroundTransparency = 1
+	Label.TextColor3 = TEXT_MAIN
+	Label.Font = Enum.Font.GothamSemibold
+	Label.TextSize = 13
+	Label.TextXAlignment = Enum.TextXAlignment.Left
+	Label.Parent = Frame
+
+	local DropBtn = Instance.new("TextButton")
+	DropBtn.Size = UDim2.new(1, -24, 0, 26)
+	DropBtn.Position = UDim2.new(0, 12, 0, 28)
+	DropBtn.BackgroundColor3 = BG_LIGHT
+	DropBtn.Text = "  " .. selected
+	DropBtn.TextColor3 = TEXT_MAIN
+	DropBtn.Font = Enum.Font.Gotham
+	DropBtn.TextSize = 12
+	DropBtn.TextXAlignment = Enum.TextXAlignment.Left
+	DropBtn.BorderSizePixel = 0
+	DropBtn.Parent = Frame
+
+	Instance.new("UICorner", DropBtn).CornerRadius = UDim.new(0, 4)
+	local DropStroke = Instance.new("UIStroke", DropBtn)
+	DropStroke.Color = OUTLINE
+
+	local Icon = Instance.new("TextLabel")
+	Icon.Size = UDim2.new(0, 20, 1, 0)
+	Icon.Position = UDim2.new(1, -25, 0, 0)
+	Icon.BackgroundTransparency = 1
+	Icon.Text = "+"
+	Icon.TextColor3 = NEON_PURPLE
+	Icon.Font = Enum.Font.GothamBold
+	Icon.TextSize = 14
+	Icon.Parent = DropBtn
+
+	local ListWrapper = Instance.new("Frame")
+	ListWrapper.Size = UDim2.new(1, 0, 0, 0)
+	ListWrapper.Position = UDim2.new(0, 0, 1, 4)
+	ListWrapper.BackgroundColor3 = BG_LIGHT
+	ListWrapper.BorderSizePixel = 0
+	ListWrapper.ClipsDescendants = true
+	ListWrapper.ZIndex = 10
+	ListWrapper.Parent = DropBtn
+
+	Instance.new("UICorner", ListWrapper).CornerRadius = UDim.new(0, 4)
+	local ListStroke = Instance.new("UIStroke", ListWrapper)
+	ListStroke.Color = NEON_PURPLE
+	ListStroke.Transparency = 1
+
+	local ListScroll = Instance.new("ScrollingFrame")
+	ListScroll.Size = UDim2.new(1, 0, 1, 0)
+	ListScroll.BackgroundTransparency = 1
+	ListScroll.ScrollBarThickness = 2
+	ListScroll.ScrollBarImageColor3 = NEON_PURPLE
+	ListScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	ListScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+	ListScroll.ZIndex = 10
+	ListScroll.Parent = ListWrapper
+
+	local LLayout = Instance.new("UIListLayout")
+	LLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	LLayout.Parent = ListScroll
+
+	local ITEM_H = 26
+	for _, opt in ipairs(options or {}) do
+		local OptBtn = Instance.new("TextButton")
+		OptBtn.Size = UDim2.new(1, 0, 0, ITEM_H)
+		OptBtn.BackgroundColor3 = DEEP_PURPLE
+		OptBtn.BackgroundTransparency = 1
+		OptBtn.Text = "  " .. opt
+		OptBtn.TextColor3 = TEXT_SUB
+		OptBtn.Font = Enum.Font.Gotham
+		OptBtn.TextSize = 12
+		OptBtn.TextXAlignment = Enum.TextXAlignment.Left
+		OptBtn.ZIndex = 11
+		OptBtn.BorderSizePixel = 0
+		OptBtn.Parent = ListScroll
+
+		OptBtn.MouseEnter:Connect(function()
+			CreateTween(OptBtn, {BackgroundTransparency = 0.5, TextColor3 = TEXT_MAIN}, 0.15)
+		end)
+		OptBtn.MouseLeave:Connect(function()
+			CreateTween(OptBtn, {BackgroundTransparency = 1, TextColor3 = TEXT_SUB}, 0.15)
+		end)
+
+		OptBtn.MouseButton1Click:Connect(function()
+			selected = opt
+			DropBtn.Text = "  " .. opt
+			isOpen = false
+			CreateTween(ListWrapper, {Size = UDim2.new(1, 0, 0, 0)}, 0.25)
+			CreateTween(ListStroke, {Transparency = 1}, 0.2)
+			CreateTween(DropStroke, {Color = OUTLINE}, 0.2)
+			CreateTween(Icon, {Rotation = 0}, 0.2)
+			Icon.Text = "+"
+			CreateTween(Frame, {Size = UDim2.new(1, 0, 0, 60)}, 0.25)
+			if callback then pcall(callback, opt) end
+		end)
+	end
+
+	DropBtn.MouseButton1Click:Connect(function()
+		isOpen = not isOpen
+		local targetHeight = math.min(#options * ITEM_H, 130)
+		if isOpen then
+			CreateTween(ListWrapper, {Size = UDim2.new(1, 0, 0, targetHeight)}, 0.25, Enum.EasingStyle.Back)
+			CreateTween(ListStroke, {Transparency = 0}, 0.2)
+			CreateTween(DropStroke, {Color = NEON_PURPLE}, 0.2)
+			CreateTween(Icon, {Rotation = 180}, 0.2)
+			Icon.Text = "-"
+			CreateTween(Frame, {Size = UDim2.new(1, 0, 0, 60 + targetHeight + 10)}, 0.25, Enum.EasingStyle.Back)
+		else
+			CreateTween(ListWrapper, {Size = UDim2.new(1, 0, 0, 0)}, 0.25)
+			CreateTween(ListStroke, {Transparency = 1}, 0.2)
+			CreateTween(DropStroke, {Color = OUTLINE}, 0.2)
+			CreateTween(Icon, {Rotation = 0}, 0.2)
+			Icon.Text = "+"
+			CreateTween(Frame, {Size = UDim2.new(1, 0, 0, 60)}, 0.25)
+		end
+	end)
+
+	return Frame
+end
+
+function ProjectGalaxy:CreateKeybind(tab, text, defaultKey, callback)
+	local currentKey = defaultKey or Enum.KeyCode.Unknown
+	local isBinding = false
+
+	local Frame = Instance.new("Frame")
+	Frame.Size = UDim2.new(1, 0, 0, 40)
+	Frame.BackgroundColor3 = BG_DARK
+	Frame.BackgroundTransparency = 0.4
+	Frame.BorderSizePixel = 0
+	Frame.Parent = tab.Content
+
+	Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 6)
+	Instance.new("UIStroke", Frame).Color = OUTLINE
+
+	local Label = Instance.new("TextLabel")
+	Label.Text = text
+	Label.Size = UDim2.new(1, -100, 1, 0)
+	Label.Position = UDim2.new(0, 12, 0, 0)
+	Label.BackgroundTransparency = 1
+	Label.TextColor3 = TEXT_MAIN
+	Label.Font = Enum.Font.GothamSemibold
+	Label.TextSize = 13
+	Label.TextXAlignment = Enum.TextXAlignment.Left
+	Label.Parent = Frame
+
+	local BindBtn = Instance.new("TextButton")
+	BindBtn.Size = UDim2.new(0, 80, 0, 24)
+	BindBtn.Position = UDim2.new(1, -92, 0.5, -12)
+	BindBtn.BackgroundColor3 = BG_LIGHT
+	local keyName = currentKey == Enum.KeyCode.Unknown and "None" or currentKey.Name
+	BindBtn.Text = keyName
+	BindBtn.TextColor3 = NEON_PURPLE
+	BindBtn.Font = Enum.Font.GothamBold
+	BindBtn.TextSize = 12
+	BindBtn.BorderSizePixel = 0
+	BindBtn.Parent = Frame
+
+	Instance.new("UICorner", BindBtn).CornerRadius = UDim.new(0, 4)
+	local BindStroke = Instance.new("UIStroke", BindBtn)
+	BindStroke.Color = OUTLINE
+
+	BindBtn.MouseButton1Click:Connect(function()
+		isBinding = true
+		BindBtn.Text = "..."
+		CreateTween(BindStroke, {Color = NEON_PURPLE}, 0.2)
+	end)
+
+	UserInputService.InputBegan:Connect(function(input, processed)
+		if isBinding then
+			if input.UserInputType == Enum.UserInputType.Keyboard then
+				local key = input.KeyCode
+				if key == Enum.KeyCode.Escape then
+					currentKey = Enum.KeyCode.Unknown
+					BindBtn.Text = "None"
+				else
+					currentKey = key
+					BindBtn.Text = key.Name
+				end
+				isBinding = false
+				CreateTween(BindStroke, {Color = OUTLINE}, 0.2)
+				if callback then pcall(callback, currentKey) end
+			end
+		elseif not processed then
+			if input.KeyCode == currentKey and currentKey ~= Enum.KeyCode.Unknown then
+				if callback then pcall(callback, currentKey) end
+			end
+		end
+	end)
+
+	return Frame
+end
+
+function ProjectGalaxy:CreateColorPicker(tab, text, defaultColor, callback)
+	local color = defaultColor or Color3.new(1, 1, 1)
+	local h, s, v = color:ToHSV()
+	local isOpen = false
+
+	local Frame = Instance.new("Frame")
+	Frame.Size = UDim2.new(1, 0, 0, 40)
+	Frame.BackgroundColor3 = BG_DARK
+	Frame.BackgroundTransparency = 0.4
+	Frame.BorderSizePixel = 0
+	Frame.Parent = tab.Content
+
+	Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 6)
+	Instance.new("UIStroke", Frame).Color = OUTLINE
+
+	local Label = Instance.new("TextLabel")
+	Label.Text = text
+	Label.Size = UDim2.new(1, -80, 0, 40)
+	Label.Position = UDim2.new(0, 12, 0, 0)
+	Label.BackgroundTransparency = 1
+	Label.TextColor3 = TEXT_MAIN
+	Label.Font = Enum.Font.GothamSemibold
+	Label.TextSize = 13
+	Label.TextXAlignment = Enum.TextXAlignment.Left
+	Label.Parent = Frame
+
+	local ColorPreviewBtn = Instance.new("TextButton")
+	ColorPreviewBtn.Size = UDim2.new(0, 40, 0, 20)
+	ColorPreviewBtn.Position = UDim2.new(1, -52, 0, 10)
+	ColorPreviewBtn.BackgroundColor3 = color
+	ColorPreviewBtn.Text = ""
+	ColorPreviewBtn.BorderSizePixel = 0
+	ColorPreviewBtn.Parent = Frame
+
+	Instance.new("UICorner", ColorPreviewBtn).CornerRadius = UDim.new(0, 4)
+	local PreviewStroke = Instance.new("UIStroke", ColorPreviewBtn)
+	PreviewStroke.Color = OUTLINE
+	PreviewStroke.Thickness = 1
+
+	local PickerWrapper = Instance.new("Frame")
+	PickerWrapper.Size = UDim2.new(1, -24, 0, 0)
+	PickerWrapper.Position = UDim2.new(0, 12, 0, 40)
+	PickerWrapper.BackgroundTransparency = 1
+	PickerWrapper.ClipsDescendants = true
+	PickerWrapper.Parent = Frame
+
+	local SVImage = Instance.new("ImageLabel")
+	SVImage.Size = UDim2.new(1, -30, 0, 100)
+	SVImage.Position = UDim2.new(0, 0, 0, 10)
+	SVImage.Image = "rbxassetid://4155801252"
+	SVImage.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
+	SVImage.BorderSizePixel = 0
+	SVImage.Parent = PickerWrapper
+
+	Instance.new("UICorner", SVImage).CornerRadius = UDim.new(0, 4)
+
+	local SVCursor = Instance.new("Frame")
+	SVCursor.Size = UDim2.new(0, 6, 0, 6)
+	SVCursor.Position = UDim2.new(s, -3, 1 - v, -3)
+	SVCursor.BackgroundColor3 = Color3.new(1, 1, 1)
+	SVCursor.Parent = SVImage
+
+	Instance.new("UICorner", SVCursor).CornerRadius = UDim.new(1, 0)
+	local CStroke = Instance.new("UIStroke", SVCursor)
+	CStroke.Color = Color3.new(0, 0, 0)
+
+	local HueImage = Instance.new("ImageLabel")
+	HueImage.Size = UDim2.new(0, 20, 0, 100)
+	HueImage.Position = UDim2.new(1, -20, 0, 10)
+	HueImage.Image = "rbxassetid://3282988620"
+	HueImage.BorderSizePixel = 0
+	HueImage.Parent = PickerWrapper
+
+	Instance.new("UICorner", HueImage).CornerRadius = UDim.new(0, 4)
+
+	local HueCursor = Instance.new("Frame")
+	HueCursor.Size = UDim2.new(1, 2, 0, 4)
+	HueCursor.Position = UDim2.new(0, -1, h, -2)
+	HueCursor.BackgroundColor3 = Color3.new(1, 1, 1)
+	HueCursor.Parent = HueImage
+
+	Instance.new("UIStroke", HueCursor).Color = Color3.new(0, 0, 0)
+
+	local function UpdateColor()
+		color = Color3.fromHSV(h, s, v)
+		ColorPreviewBtn.BackgroundColor3 = color
+		SVImage.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
+		if callback then pcall(callback, color) end
+	end
+
+	local svSliding = false
+	SVImage.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			svSliding = true
+			local size = SVImage.AbsoluteSize
+			local pos = input.Position - SVImage.AbsolutePosition
+			s = math.clamp(pos.X / size.X, 0, 1)
+			v = 1 - math.clamp(pos.Y / size.Y, 0, 1)
+			SVCursor.Position = UDim2.new(s, -3, 1 - v, -3)
+			UpdateColor()
+			input:Capture()
+		end
+	end)
+
+	SVImage.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			svSliding = false
+		end
+	end)
+
+	UserInputService.InputChanged:Connect(function(input)
+		if svSliding and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+			local size = SVImage.AbsoluteSize
+			local pos = input.Position - SVImage.AbsolutePosition
+			s = math.clamp(pos.X / size.X, 0, 1)
+			v = 1 - math.clamp(pos.Y / size.Y, 0, 1)
+			SVCursor.Position = UDim2.new(s, -3, 1 - v, -3)
+			UpdateColor()
+		end
+	end)
+
+	local hueSliding = false
+	HueImage.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			hueSliding = true
+			local size = HueImage.AbsoluteSize
+			local pos = input.Position - HueImage.AbsolutePosition
+			h = math.clamp(pos.Y / size.Y, 0, 1)
+			HueCursor.Position = UDim2.new(0, -1, h, -2)
+			UpdateColor()
+			input:Capture()
+		end
+	end)
+
+	HueImage.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			hueSliding = false
+		end
+	end)
+
+	UserInputService.InputChanged:Connect(function(input)
+		if hueSliding and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+			local size = HueImage.AbsoluteSize
+			local pos = input.Position - HueImage.AbsolutePosition
+			h = math.clamp(pos.Y / size.Y, 0, 1)
+			HueCursor.Position = UDim2.new(0, -1, h, -2)
+			UpdateColor()
+		end
+	end)
+
+	ColorPreviewBtn.MouseButton1Click:Connect(function()
+		isOpen = not isOpen
+		if isOpen then
+			CreateTween(Frame, {Size = UDim2.new(1, 0, 0, 160)}, 0.3, Enum.EasingStyle.Back)
+			CreateTween(PickerWrapper, {Size = UDim2.new(1, -24, 0, 120)}, 0.3)
+			CreateTween(PreviewStroke, {Color = NEON_PURPLE}, 0.2)
+		else
+			CreateTween(Frame, {Size = UDim2.new(1, 0, 0, 40)}, 0.3)
+			CreateTween(PickerWrapper, {Size = UDim2.new(1, -24, 0, 0)}, 0.3)
+			CreateTween(PreviewStroke, {Color = OUTLINE}, 0.2)
+		end
+	end)
+
+	return Frame
 end
 
 return ProjectGalaxy
